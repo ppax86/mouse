@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decorate the Cake!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid black;
+            margin-bottom: 10px;
+        }
+        .options-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+        .scrollable {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .option {
+            width: 40px;
+            height: 40px;
+            margin: 5px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        .option:hover {
+            border-color: #000;
+        }
+        .color-option {
+            border-radius: 50%;
+        }
+        .shape-option, .topping-option {
+            background-color: #f0f0f0;
+        }
+        h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        .control-buttons {
+            margin-top: 10px;
+        }
+        .control-buttons button {
+            font-size: 24px;
+            margin: 0 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+        .control-buttons button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="title">Decorate the Cake!</h1>
+    <canvas id="gameCanvas" width="600" height="450"></canvas>
+
+    <div class="control-buttons">
+        <button id="undoBtn" onclick="undo()" disabled>&#8592;</button>
+        <button id="redoBtn" onclick="redo()" disabled>&#8594;</button>
+        <button onclick="clearCanvas()">Start Over</button>
+    </div>
+
+    <h2>Colors</h2>
+    <div class="options-container" id="colors"></div>
+
+    <h2>Shapes</h2>
+    <div class="options-container scrollable" id="shapes"></div>
+
+    <h2>Toppings</h2>
+    <div class="options-container scrollable" id="toppings"></div>
+
+    <h2>Stamps</h2>
+    <div class="options-container scrollable" id="stamps"></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let currentColor = 'pink';
+        let currentShape = 'circle';
+        let currentTopping = '';
+        let currentStamp = '';
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        const colors = ['pink', 'yellow', 'lightblue', 'lightgreen', 'lavender', 'orange', 'red', 'cyan', 'magenta', 'brown'];
+        const shapes = ['circle', 'square', 'triangle', 'star', 'heart', 'diamond'];
+        const toppings = ['sprinkles', 'cherry', 'candle', 'chocolate_chip', 'strawberry', 'blueberry'];
+        const stamps = ['🐱', '🐶', '🐰', '🦄', '🦋', '🌈', '🌟', '🍓', '🍫', '🎈'];
+
+        let undoStack = [];
+        let redoStack = [];
+
+        function createOptions(containerId, options, type) {
+            const container = document.getElementById(containerId);
+            options.forEach(option => {
+                const div = document.createElement('div');
+                div.className = `option ${type}-option`;
+                if (type === 'color') {
+                    div.style.backgroundColor = option;
+                } else if (type === 'shape') {
+                    const shapeCanvas = document.createElement('canvas');
+                    shapeCanvas.width = 40;
+                    shapeCanvas.height = 40;
+                    const shapeCtx = shapeCanvas.getContext('2d');
+                    drawShape(shapeCtx, 20, 20, option, 'black');
+                    div.appendChild(shapeCanvas);
+                } else if (type === 'topping') {
+                    const toppingCanvas = document.createElement('canvas');
+                    toppingCanvas.width = 40;
+                    toppingCanvas.height = 40;
+                    const toppingCtx = toppingCanvas.getContext('2d');
+                    drawTopping(toppingCtx, 20, 20, option);
+                    div.appendChild(toppingCanvas);
+                } else {
+                    div.textContent = option;
+                }
+                div.onclick = () => setOption(type, option);
+                container.appendChild(div);
+            });
+        }
+
+        createOptions('colors', colors, 'color');
+        createOptions('shapes', shapes, 'shape');
+        createOptions('toppings', toppings, 'topping');
+        createOptions('stamps', stamps, 'stamp');
+
+        function setOption(type, option) {
+            if (type === 'color') currentColor = option;
+            else if (type === 'shape') currentShape = option;
+            else if (type === 'topping') currentTopping = option;
+            else if (type === 'stamp') currentStamp = option;
+        }
+
+        function drawCake() {
+            ctx.fillStyle = '#F5DEB3';
+            ctx.fillRect(75, 75, 450, 300);
+        }
+
+        drawCake();
+
+        function saveState() {
+            undoStack.push(canvas.toDataURL());
+            redoStack = [];
+            updateButtons();
+        }
+
+        function undo() {
+            if (undoStack.length > 0) {
+                redoStack.push(canvas.toDataURL());
+                const prevState = undoStack.pop();
+                const img = new Image();
+                img.onload = function() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = prevState;
+                updateButtons();
+            }
+        }
+
+        function redo() {
+            if (redoStack.length > 0) {
+                undoStack.push(canvas.toDataURL());
+                const nextState = redoStack.pop();
+                const img = new Image();
+                img.onload = function() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = nextState;
+                updateButtons();
+            }
+        }
+
+        function updateButtons() {
+            document.getElementById('undoBtn').disabled = undoStack.length === 0;
+            document.getElementById('redoBtn').disabled = redoStack.length === 0;
+        }
+
+        function clearCanvas() {
+            saveState();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawCake();
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+            saveState();
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function drawShape(ctx, x, y, shape, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            switch (shape) {
+                case 'circle':
+                    ctx.arc(x, y, 15, 0, Math.PI * 2);
+                    break;
+                case 'square':
+                    ctx.rect(x - 15, y - 15, 30, 30);
+                    break;
+                case 'triangle':
+                    ctx.moveTo(x, y - 15);
+                    ctx.lineTo(x + 15, y + 15);
+                    ctx.lineTo(x - 15, y + 15);
+                    break;
+                case 'star':
+                    for (let i = 0; i < 5; i++) {
+                        ctx.lineTo(x + 15 * Math.cos((18 + i * 72) * Math.PI / 180), y + 15 * Math.sin((18 + i * 72) * Math.PI / 180));
+                        ctx.lineTo(x + 7 * Math.cos((54 + i * 72) * Math.PI / 180), y + 7 * Math.sin((54 + i * 72) * Math.PI / 180));
+                    }
+                    break;
+                case 'heart':
+                    ctx.moveTo(x, y + 10);
+                    ctx.bezierCurveTo(x - 15, y - 15, x - 30, y, x, y + 25);
+                    ctx.bezierCurveTo(x + 30, y, x + 15, y - 15, x, y + 10);
+                    break;
+                case 'diamond':
+                    ctx.moveTo(x, y - 15);
+                    ctx.lineTo(x + 15, y);
+                    ctx.lineTo(x, y + 15);
+                    ctx.lineTo(x - 15, y);
+                    break;
+            }
+            ctx.closePath();
+            ctx.fill();
+            if (shape !== 'circle' && shape !== 'square') {
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        function drawTopping(ctx, x, y, topping) {
+            switch (topping) {
+                case 'sprinkles':
+                    for (let i = 0; i < 10; i++) {
+                        ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                        ctx.fillRect(x + Math.random() * 30 - 15, y + Math.random() * 30 - 15, 4, 4);
+                    }
+                    break;
+                case 'cherry':
+                    ctx.fillStyle = 'red';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = 'green';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x, y - 15);
+                    ctx.stroke();
+                    break;
+                case 'candle':
+                    ctx.fillStyle = 'yellow';
+                    ctx.fillRect(x - 4, y - 22, 8, 22);
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y - 22);
+                    ctx.lineTo(x, y - 30);
+                    ctx.stroke();
+                    ctx.fillStyle = 'orange';
+                    ctx.beginPath();
+                    ctx.moveTo(x, y - 30);
+                    ctx.quadraticCurveTo(x + 7, y - 37, x, y - 45);
+                    ctx.quadraticCurveTo(x - 7, y - 37, x, y - 30);
+                    ctx.fill();
+                    break;
+                case 'chocolate_chip':
+                    ctx.fillStyle = 'saddlebrown';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 'strawberry':
+                    ctx.fillStyle = 'red';
+                    ctx.beginPath();
+                    ctx.moveTo(x, y - 10);
+                    ctx.bezierCurveTo(x - 10, y - 10, x - 10, y + 10, x, y + 10);
+                    ctx.bezierCurveTo(x + 10, y + 10, x + 10, y - 10, x, y - 10);
+                    ctx.fill();
+                    ctx.fillStyle = 'yellow';
+                    for (let i = 0; i < 5; i++) {
+                        ctx.beginPath();
+                        ctx.arc(x + Math.random() * 10 - 5, y + Math.random() * 15 - 7, 1, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    break;
+                case 'blueberry':
+                    ctx.fillStyle = 'darkblue';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = 'lightblue';
+                    ctx.beginPath();
+                    ctx.arc(x - 2, y - 2, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+            }
+        }
+
+        function drawStamp(x, y) {
+            ctx.font = '30px Arial';
+            ctx.fillText(currentStamp, x - 15, y + 15);
+        }
+
+        // Animate title
+        function animateTitle() {
+            const title = document.getElementById('title');
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            title.style.color = randomColor;
+        }
+
+        setInterval(animateTitle, 5000);
+    </script>
+</body>
+</html>
